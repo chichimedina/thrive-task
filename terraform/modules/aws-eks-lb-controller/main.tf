@@ -4,7 +4,9 @@ locals {
 
 }
 
+data "aws_caller_identity" "current" {}
 
+## Create OpenID Connect provider
 resource "aws_iam_openid_connect_provider" "lb_controller_oidc_issuer" {
   url = var.lb_controller_oidc_issuer
 
@@ -14,6 +16,7 @@ resource "aws_iam_openid_connect_provider" "lb_controller_oidc_issuer" {
 
 }
 
+## IAM policy for the LB controller
 resource "aws_iam_policy" "lb_controller_iam_policy" {
   name        = "${var.name}-lb-controller-policy"
   path        = "/"
@@ -22,6 +25,7 @@ resource "aws_iam_policy" "lb_controller_iam_policy" {
   policy = file(var.lb_controller_policy_file)
 }
 
+## IAM role for the LB controller
 resource "aws_iam_role" "aws_lb_controller_role" {
   name = "${var.name}-lb-controller-role"
 
@@ -31,7 +35,7 @@ resource "aws_iam_role" "aws_lb_controller_role" {
         {
             "Effect": "Allow",
             "Principal": {
-                "Federated": "arn:aws:iam::642737192615:oidc-provider/oidc.eks.${var.region}.amazonaws.com/id/${var.lb_controller_oidc_id}"
+                "Federated": "arn:aws:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/oidc.eks.${var.region}.amazonaws.com/id/${var.lb_controller_oidc_id}"
             },
             "Action": "sts:AssumeRoleWithWebIdentity",
             "Condition": {
@@ -52,6 +56,7 @@ resource "aws_iam_role_policy_attachment" "iam_lb_controller_policy_attachment" 
   role       = aws_iam_role.aws_lb_controller_role.name
 }
 
+## Kubernetes service account for LB controller
 resource "kubernetes_service_account" "service_account" {
   metadata {
     name      = "aws-load-balancer-controller"
@@ -67,6 +72,7 @@ resource "kubernetes_service_account" "service_account" {
   }
 }
 
+## Deploy the LB controller via Helm charts
 resource "helm_release" "alb_controller" {
   name       = "aws-load-balancer-controller"
   repository = "https://aws.github.io/eks-charts"

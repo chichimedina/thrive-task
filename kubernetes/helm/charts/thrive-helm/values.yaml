@@ -1,0 +1,12 @@
+container:
+  image:
+    repository: "registry-1.docker.io/alejandromedina/thrive-app"
+    tag: "1.0.0"
+  port: "5050"
+
+lb:
+  port: "80"
+
+env:
+  name: "dev"
+  USER_NAME: ""

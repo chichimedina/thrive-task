@@ -1,11 +1,13 @@
 locals {
 
+   ## Get the OpenID Connect ID of the EKs cluster
    eks_oidc_id = regex("\\/([a-zA-Z0-9]+)$", aws_eks_cluster.eks_cluster.identity[0].oidc[0].issuer)[0]
 
    tags = jsondecode(var.tags)
 
 }
 
+## EKS Cluster
 resource "aws_eks_cluster" "eks_cluster" {
   name = var.name
 
@@ -36,6 +38,8 @@ resource "aws_eks_cluster" "eks_cluster" {
     }
   }
 
+  enabled_cluster_log_types = ["api", "audit", "controllerManager", "scheduler", "authenticator"]
+
   vpc_config {
     endpoint_private_access = var.endpoint_private_access
     endpoint_public_access  = var.endpoint_public_access
@@ -43,9 +47,6 @@ resource "aws_eks_cluster" "eks_cluster" {
     subnet_ids = var.private_subnets_cidr
   }
 
-  # Ensure that IAM Role permissions are created before and deleted
-  # after EKS Cluster handling. Otherwise, EKS will not be able to
-  # properly delete EKS managed EC2 infrastructure such as Security Groups.
   depends_on = [
     aws_iam_role_policy_attachment.eks_cluster_AmazonEKSLoadBalancingPolicy,
     aws_iam_role_policy_attachment.eks_cluster_AmazonEKSComputePolicy,
@@ -58,6 +59,7 @@ resource "aws_eks_cluster" "eks_cluster" {
 
 }
 
+## IAM role for the EKS nodes
 resource "aws_iam_role" "eks_node" {
   name = "${var.name}-node-role"
   assume_role_policy = jsonencode({
@@ -87,6 +89,7 @@ resource "aws_iam_role_policy_attachment" "eks_node_AmazonEC2ContainerRegistryPu
   role = aws_iam_role.eks_node.name
 }
 
+## IAM role for the EKS cluster 
 resource "aws_iam_role" "eks_cluster" {
   name = "${var.name}-cluster-role"
   assume_role_policy = jsonencode({

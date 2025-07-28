@@ -2,7 +2,9 @@ name = "thrive"
 
 eks_version = "1.32"
 
-environment = "prd"
+environment = "dev"
+
+aws_user = "cacaotech-admin"
 
 vpc_cidr = "10.100.0.0/20"
 
@@ -28,6 +30,7 @@ eks_addon_repo_number = "602401143452"
 
 tags = <<-EOF
 {
-  "ProjectCode": "thrive-tech"
+  "ProjectCode": "thrive-tech",
+  "Managed-By": "terraform"
 }
 EOF

@@ -134,7 +134,7 @@ variable "lb_controller_oidc_issuer" {
 
 variable "lb_controller_policy_file" {
   type        = string
-  default     = "iam-policies/aws-lb-controller-iam-policy.json"
+  default     = "configs/aws-lb-controller-iam-policy.json"
   description = "EKS cluster's OIDC provider URL"
 }
 
@@ -145,9 +145,10 @@ variable "eks_cluster_name" {
 }
 
 
+##   --------------------
+##   AWS IAM user to grant access to the EKS cluster 
 
 variable "aws_user" {
   type        = string
-  default     = "cacaotech-admin"
   description = "Default AWS user to provision these EKS resources as"
 }

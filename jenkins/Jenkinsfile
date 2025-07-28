@@ -1,0 +1,90 @@
+def user_name = params.'Your Name'
+def helm_release = params.'Helm Release'
+
+pipeline {
+    agent any
+    stages {
+        stage ("Check dependencies"){
+            steps {
+                sh 'which aws eksctl kubectl helm'
+            }
+        }
+        stage("Job Initialization") {
+            steps {
+                
+                print("\n\n\n__________________________")
+                print(">> JOB INITIALIZATION:")
+                
+                print("\n* Check out Thrive App code fromm `${THRIVE_REPOSITORY}`")
+                git url: "${THRIVE_REPOSITORY}", branch:"${THRIVE_REPOSITORY_BRANCH}"
+                    
+                print("\n* Log in to Thrive App Docker registry `${THRIVE_REGISTRY}`")
+                withCredentials([usernamePassword(credentialsId: "${THRIVE_DOCKERHUB_CREDS}", usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
+                    sh '''
+                        echo ${PASSWORD} | docker login -u ${USERNAME} ${THRIVE_REGISTRY} --password-stdin
+                        echo ${PASSWORD} | helm registry login ${THRIVE_REGISTRY} -u ${USERNAME} --password-stdin
+                    '''
+                }
+                
+            }
+        }
+        
+        stage("Thrive App Image Build") {
+            steps {
+                print("\n\n\n__________________________")
+                print(">> BUILD AND PUSH THRIVE APP IMAGE:\n")
+                sh '''
+                    docker build -t "${THRIVE_REGISTRY}/${APP_NAME}:${Version}" -f docker/Dockerfile .
+                    docker push -q ${THRIVE_REGISTRY}/"${APP_NAME}:${Version}"
+                '''
+            }
+        }
+        
+        stage("Deploy Thrive App") {
+            steps {
+                withAWS(credentials: "${AWS_CREDS}", region: "${AWS_REGION}") {
+                    withEnv(["UPGRADE_RELEASE=${helm_release}", "USER_NAME=${user_name}"]) {
+                        print("\n\n\n__________________________")
+                        print(">> DEPLOY THRIVE APP IMAGE: `v${Version}`\n")
+                        sh '''
+                            set +x
+                            aws eks update-kubeconfig --name ${EKS_CLUSTER_NAME} --region ${AWS_REGION}
+                            helm upgrade --install                      \
+                               "${UPGRADE_RELEASE}"                     \
+                               oci://${THRIVE_REGISTRY}/${HELM_NAME}    \
+                               --version ${HELM_CHART_VERSION}          \
+                               --set env.USER_NAME="${USER_NAME}"       \
+                               --set container.image.tag="${Version}"   \
+                               --namespace="${UPGRADE_RELEASE}"         \
+                               --create-namespace                       \
+                               --wait                                   \
+                               --timeout ${HELM_TIMEOuT}
+                               
+                            APP_ENDPOINT=`kubectl get ingress -n "${UPGRADE_RELEASE}" -o=jsonpath="{.items[?(@.metadata.name=='${UPGRADE_RELEASE}-${HELM_NAME}')].status.loadBalancer.ingress[0].hostname}"`
+                            
+                            echo -e '\n\n________________________'
+                            echo "Application Endpoint: http://${APP_ENDPOINT}"
+                            echo -e '\n\n'
+                        '''
+                    }
+                }
+            }
+        }
+        
+    }
+    post {
+        always {
+            script {
+                // Set build name
+                currentBuild.displayName = "Thrive Deployment: #${BUILD_NUMBER}"
+                
+                println(">> Performing post-action tasks")
+                sh '''
+                    ## Docker images cleanup on this Jenkins node
+                    docker rmi -f `docker inspect ${THRIVE_REGISTRY}/${APP_NAME}:${Version} --format '{{.Id}}'`
+                '''
+            }
+            cleanWs()
+        }
+    }
+}
